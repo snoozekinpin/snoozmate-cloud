@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>好眠 SnoozMate · 实时守护仪表盘</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #0a0e1a 0%, #1a1033 50%, #0d1524 100%);
+    color: #e0e6ff;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .title {
+    font-size: 24px; font-weight: 600;
+    background: linear-gradient(90deg, #7c3aed, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+  .device-info {
+    display: flex; gap: 12px; align-items: center;
+    font-size: 14px; color: #94a3b8;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 12px #22c55e;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr 1fr;
+    gap: 20px;
+  }
+  .card {
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .card-title {
+    font-size: 13px; color: #94a3b8;
+    margin-bottom: 12px; text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* 状态面板 */
+  .state-badge {
+    display: inline-block;
+    padding: 6px 16px; border-radius: 20px;
+    font-size: 14px; font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .state-standby { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+  .state-monitoring { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  .state-intervention { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+  .state-cooldown { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+  .state-verifying { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+
+  .stat-row {
+    display: flex; justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    font-size: 14px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: #94a3b8; }
+  .stat-value { font-weight: 600; color: #e0e6ff; }
+
+  /* 预算条 */
+  .budget-bar {
+    height: 8px;
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 4px;
+    margin: 8px 0 4px;
+    overflow: hidden;
+  }
+  .budget-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+  .budget-label {
+    font-size: 12px; color: #64748b;
+    display: flex; justify-content: space-between;
+  }
+
+  /* 振动等级指示器 */
+  .level-indicator {
+    display: flex; gap: 8px; margin: 16px 0;
+    justify-content: center;
+  }
+  .level-bar {
+    width: 40px; height: 60px;
+    border-radius: 8px;
+    background: rgba(148, 163, 184, 0.1);
+    transition: all 0.3s;
+    position: relative;
+  }
+  .level-bar.active {
+    background: linear-gradient(to top, #f59e0b, #ef4444);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+  }
+  .level-bar span {
+    position: absolute; bottom: -20px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; color: #64748b;
+  }
+
+  /* 时间轴 */
+  .timeline {
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  .timeline::-webkit-scrollbar { width: 4px; }
+  .timeline::-webkit-scrollbar-thumb {
+    background: rgba(124, 58, 237, 0.3);
+    border-radius: 2px;
+  }
+  .log-item {
+    display: flex; gap: 12px;
+    padding: 10px 0;
+    border-left: 2px solid rgba(124, 58, 237, 0.3);
+    margin-left: 10px;
+    padding-left: 16px;
+    position: relative;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .log-item::before {
+    content: '';
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #7c3aed;
+    position: absolute; left: -6px; top: 14px;
+  }
+  .log-item.info::before { background: #60a5fa; }
+  .log-item.action::before { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+  .log-item.success::before { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+  .log-item.skip::before { background: #a78bfa; }
+  .log-item.warn::before { background: #ef4444; }
+  .log-time { color: #64748b; font-size: 11px; min-width: 60px; }
+  .log-msg { flex: 1; color: #cbd5e1; }
+  .log-tag {
+    display: inline-block;
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; margin-left: 6px;
+    background: rgba(124, 58, 237, 0.2);
+    color: #a78bfa;
+  }
+
+  /* 右侧：传感器 + 晨报 */
+  .sensor-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 20px;
+  }
+  .sensor-card {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+  .sensor-value {
+    font-size: 28px; font-weight: 700;
+    margin: 4px 0;
+  }
+  .sensor-label { font-size: 11px; color: #64748b; }
+  .audio-wave {
+    height: 60px;
+    display: flex; align-items: center; justify-content: center;
+    gap: 3px; margin: 12px 0;
+  }
+  .wave-bar {
+    width: 4px; background: linear-gradient(to top, #7c3aed, #06b6d4);
+    border-radius: 2px; transition: height 0.1s;
+  }
+
+  .report-box {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(6, 182, 212, 0.1));
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .report-title {
+    font-size: 12px; color: #a78bfa;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .report-text {
+    font-size: 14px; line-height: 1.7; color: #e0e6ff;
+  }
+
+  .controls {
+    display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+  }
+  .btn {
+    padding: 8px 16px; border-radius: 8px;
+    background: rgba(124, 58, 237, 0.2);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    color: #e0e6ff; font-size: 12px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: rgba(124, 58, 237, 0.4); }
+  .btn.primary { background: linear-gradient(135deg, #7c3aed, #06b6d4); border: none; }
+  .btn.danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <div class="title">🌙 好眠 SnoozMate · 实时守护</div>
+      <div class="subtitle">Agent 决策引擎 · 五问循环 · 实时可视化</div>
+    </div>
+    <div class="device-info">
+      <span class="status-dot"></span>
+      <span id="deviceId">月石主机 · dev_001</span>
+      <span id="currentTime" style="color:#64748b; margin-left:12px;"></span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- 左列：状态 -->
+    <div class="card">
+      <div class="card-title">Agent 状态</div>
+      <span id="stateBadge" class="state-badge state-standby">待机中</span>
+
+      <div class="level-indicator">
+        <div class="level-bar" id="lvl1"><span>L1</span></div>
+        <div class="level-bar" id="lvl2"><span>L2</span></div>
+        <div class="level-bar" id="lvl3"><span>L3</span></div>
+      </div>
+      <div style="text-align:center; font-size:12px; color:#64748b; margin-top:20px;">
+        振动等级
+      </div>
+
+      <div style="margin-top: 24px;">
+        <div class="card-title" style="margin-bottom:4px;">今夜干预预算</div>
+        <div class="budget-bar">
+          <div class="budget-fill" id="budgetFill" style="width: 0%"></div>
+        </div>
+        <div class="budget-label">
+          <span>已用 <b id="usedRounds">0</b> 轮</span>
+          <span>剩余 <b id="remainRounds">6</b> 轮</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <div class="stat-row">
+          <span class="stat-label">连续鼾声</span>
+          <span class="stat-value"><span id="snoreStreak">0</span> 秒</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">模型版本</span>
+          <span class="stat-value">rule_v1</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中列：决策时间轴 -->
+    <div class="card">
+      <div class="card-title">🤔 决策时间轴（分寸感可视化）</div>
+      <div class="timeline" id="timeline">
+        <div style="text-align:center; color:#64748b; padding: 40px 0; font-size: 13px;">
+          等待数据...
+        </div>
+      </div>
+    </div>
+
+    <!-- 右列：传感器 + 控制 -->
+    <div class="card">
+      <div class="card-title">传感器实时数据</div>
+      <div class="sensor-grid">
+        <div class="sensor-card">
+          <div class="sensor-label">鼾声置信度</div>
+          <div class="sensor-value" id="snoreConf">0%</div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-label">体动强度</div>
+          <div class="sensor-value" id="motionLvl">0</div>
+        </div>
+      </div>
+
+      <div class="audio-wave" id="audioWave"></div>
+
+      <div class="card-title" style="margin-top: 20px;">模拟控制</div>
+      <div class="controls">
+        <button class="btn primary" onclick="startSimulation()">▶ 模拟一夜</button>
+        <button class="btn" onclick="bedtime()">🛌 上床</button>
+        <button class="btn danger" onclick="resetAgent()">🔄 重置</button>
+        <button class="btn" onclick="injectSnore()">😴 注入鼾声</button>
+      </div>
+
+      <div class="report-box">
+        <div class="report-title">📋 昨夜晨报</div>
+        <div class="report-text" id="morningReport">
+          暂无数据
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEVICE_ID = 'dev_001';
+let simTimer = null;
+let simStep = 0;
+
+// 初始化波形条
+const waveContainer = document.getElementById('audioWave');
+for (let i = 0; i < 20; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'wave-bar';
+  bar.style.height = '4px';
+  waveContainer.appendChild(bar);
+}
+
+function updateTime() {
+  const now = new Date();
+  document.getElementById('currentTime').textContent =
+    now.toLocaleTimeString('zh-CN', {hour12: false});
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+// 更新状态
+function updateStatus(data) {
+  const stateMap = {
+    'STANDBY': ['待机中', 'state-standby'],
+    'MONITORING': ['观察中', 'state-monitoring'],
+    'CONFIRMING': ['确认中', 'state-monitoring'],
+    'INTERVENTION': ['干预中', 'state-intervention'],
+    'VERIFYING': ['验证中', 'state-verifying'],
+    'COOLDOWN': ['冷却中', 'state-cooldown'],
+  };
+  const [label, cls] = stateMap[data.state] || [data.state, 'state-standby'];
+  const badge = document.getElementById('stateBadge');
+  badge.textContent = label;
+  badge.className = 'state-badge ' + cls;
+
+  // 振动等级
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById('lvl' + i).classList.toggle('active', data.current_level >= i);
+  }
+
+  // 预算
+  const used = data.rounds_done;
+  const remain = data.rounds_remaining;
+  const total = used + remain;
+  document.getElementById('usedRounds').textContent = used;
+  document.getElementById('remainRounds').textContent = remain;
+  document.getElementById('budgetFill').style.width = (used / total * 100) + '%';
+
+  // 连续鼾声
+  document.getElementById('snoreStreak').textContent = data.snore_streak.toFixed(1);
+
+  // 时间轴
+  if (data.recent_log && data.recent_log.length > 0) {
+    renderTimeline(data.recent_log);
+  }
+}
+
+function renderTimeline(logs) {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  // 倒序显示（最新在上）
+  [...logs].reverse().forEach(entry => {
+    const div = document.createElement('div');
+    div.className = 'log-item ' + entry.level;
+    let dataStr = '';
+    if (entry.data && Object.keys(entry.data).length > 0) {
+      dataStr = ' <span class="log-tag">' +
+        Object.entries(entry.data).map(([k,v]) => `${k}:${v}`).join(' ') +
+        '</span>';
+    }
+    div.innerHTML = `
+      <div class="log-time">${entry.time}</div>
+      <div class="log-msg">${entry.message}${dataStr}</div>
+    `;
+    tl.appendChild(div);
+  });
+}
+
+function updateWave(confidence) {
+  const bars = document.querySelectorAll('.wave-bar');
+  bars.forEach((bar, i) => {
+    const height = Math.max(4, Math.random() * confidence * 56 + 4);
+    bar.style.height = height + 'px';
+  });
+}
+
+// 模拟一夜
+function startSimulation() {
+  if (simTimer) { clearInterval(simTimer); }
+  simStep = 0;
+  bedtime();
+
+  simTimer = setInterval(async () => {
+    simStep++;
+    let conf = 0;
+    let inBed = true;
+    let motion = 0;
+
+    // 模拟不同阶段
+    if (simStep < 15) {
+      // 入睡保护期
+      conf = Math.random() * 0.3;
+    } else if (simStep < 40) {
+      // 连续鼾声阶段
+      conf = 0.7 + Math.random() * 0.2;
+    } else if (simStep < 55) {
+      // 冷却 + 观察
+      conf = Math.random() * 0.4;
+    } else if (simStep < 80) {
+      // 又一轮鼾声
+      conf = 0.8 + Math.random() * 0.15;
+    } else if (simStep < 120) {
+      // 安静
+      conf = Math.random() * 0.2;
+    } else {
+      // 结束
+      clearInterval(simTimer);
+      simTimer = null;
+      return;
+    }
+
+    const res = await fetch('/api/v1/agent/tick', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        device_id: DEVICE_ID,
+        audio_confidence: conf,
+        in_bed: inBed,
+        body_motion_level: motion,
+        temp_ok: true,
+        is_partner: false,
+      })
+    });
+    const data = await res.json();
+    updateStatus(data);
+    document.getElementById('snoreConf').textContent = (conf * 100).toFixed(0) + '%';
+    document.getElementById('motionLvl').textContent = motion.toFixed(2);
+    updateWave(conf);
+  }, 500);
+}
+
+async function bedtime() {
+  await fetch(`/api/v1/agent/${DEVICE_ID}/bedtime`, {method: 'POST'});
+  refreshStatus();
+}
+
+async function resetAgent() {
+  if (simTimer) { clearInterval(simTimer); simTimer = null; }
+  await fetch(`/api/v1/agent/${DEVICE_ID}/reset`, {method: 'POST'});
+  refreshStatus();
+  document.getElementById('snoreConf').textContent = '0%';
+  document.getElementById('morningReport').textContent = '暂无数据';
+  updateWave(0);
+}
+
+async function injectSnore() {
+  for (let i = 0; i < 12; i++) {
+    await fetch('/api/v1/agent/tick', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        device_id: DEVICE_ID,
+        audio_confidence: 0.85,
+        in_bed: true,
+        body_motion_level: 0.1,
+      })
+    });
+  }
+  refreshStatus();
+}
+
+async function refreshStatus() {
+  const res = await fetch(`/api/v1/agent/${DEVICE_ID}/status`);
+  const data = await res.json();
+  updateStatus({...data, recent_log: data.decisions});
+}
+
+// 初始加载
+refreshStatus();
+</script>
+</body>
+</html>
