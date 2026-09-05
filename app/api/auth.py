@@ -44,7 +44,8 @@ class BindRequest(BaseModel):
 async def login(req: LoginRequest):
     """
     微信登录 → 返回 userId + 业务会话
-    比赛/开发阶段：用假 code 测试，test_code_xxx → test_user_xxx
+    开发阶段可用假 code 测试（test_code_xxx → user_xxx），需显式设置
+    SNOOZMATE_ALLOW_TEST_LOGIN=true；生产环境保持关闭。
     """
     now = int(datetime.now().timestamp())
     user_id, openid = await _resolve_login_identity(req)
@@ -225,6 +226,10 @@ async def _resolve_login_identity(req: LoginRequest) -> tuple[str, str]:
     if not req.login_code.strip():
         raise HTTPException(status_code=400, detail="login_code 不能为空")
     if req.login_code.startswith("test_code_"):
+        # 未开启开关时不承认测试码，且复用与凭据无效相同的响应，避免对外
+        # 暴露存在这条测试通道。
+        if not config.ALLOW_TEST_LOGIN:
+            raise HTTPException(status_code=401, detail="微信登录凭据无效")
         suffix = req.login_code.removeprefix("test_code_") or "default"
         return f"user_{suffix}", f"test:{suffix}"
 

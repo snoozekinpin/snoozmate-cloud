@@ -158,7 +158,7 @@ node tests\real-http.integration.test.js
 | 1.4 | `GET /api/v1/user/devices` | 获取用户已绑定设备列表 |
 
 ```python
-# 测试码登录（开发阶段）
+# 测试码登录（仅开发阶段，需 SNOOZMATE_ALLOW_TEST_LOGIN=true；生产关闭时返回 401）
 POST /api/v1/auth/login  body: {"login_code": "test_code_xxx"}
 # 返回：{"user_id": "...", "session_token": "sess_xxx", "nickname": "..."}
 ```

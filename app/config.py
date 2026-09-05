@@ -89,6 +89,10 @@ LLM_OVERALL_TIMEOUT_SECONDS = float(os.environ.get(
     "30" if _ark_llm else "4",
 ))
 
+# test_code_* 登录只在显式开启时可用。生产必须保持关闭，否则任何人都能
+# 用确定性的假 code 换到合法会话。
+ALLOW_TEST_LOGIN = _truthy("SNOOZMATE_ALLOW_TEST_LOGIN")
+
 # Configure these in production to exchange wx.login codes for a stable openid.
 # During local/cloud debugging, the mini program sends a persistent installation ID
 # so changing one-time login codes do not create a new user on every launch.

@@ -79,7 +79,7 @@ LLM is optional. If `LLM_API_KEY` is empty everything is deterministic rule-base
 
 ### Auth
 
-Bearer `session_token` in `Authorization` header, resolved by `_get_user_from_token`. Login codes starting with `test_code_` map to deterministic test users. Without WeChat credentials, identity falls back to the mini program's persistent `client_id`.
+Bearer `session_token` in `Authorization` header, resolved by `_get_user_from_token`. Login codes starting with `test_code_` map to deterministic test users, but only when `SNOOZMATE_ALLOW_TEST_LOGIN` is truthy — otherwise they are rejected as invalid credentials. Keep it off in production: the mapping is deterministic, so an enabled flag lets anyone mint a session for any `user_<suffix>`. Without WeChat credentials, identity falls back to the mini program's persistent `client_id`.
 
 ## Conventions
 
